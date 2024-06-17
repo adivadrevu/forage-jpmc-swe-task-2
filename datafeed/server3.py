@@ -148,14 +148,26 @@ def order_book(orders, book, stock_name):
 #
 # Test Data Persistence
 
+# def generate_csv():
+#     """ Generate a CSV of order history. """
+#     with open('test.csv', 'wb') as f:
+#         writer = csv.writer(f)
+#         for t, stock, side, order, size in orders(market()):
+#             if t > MARKET_OPEN + SIM_LENGTH:
+#                 break
+#             writer.writerow([t, stock, side, order, size])
 def generate_csv():
     """ Generate a CSV of order history. """
-    with open('test.csv', 'wb') as f:
+    with open('test.csv', 'w', newline='') as f:
         writer = csv.writer(f)
-        for t, stock, side, order, size in orders(market()):
+        for idx, (t, stock, side, order, size) in enumerate(orders(market())):
             if t > MARKET_OPEN + SIM_LENGTH:
                 break
             writer.writerow([t, stock, side, order, size])
+            if idx < 10:  # Print first 10 rows for debug
+                print(f"Row {idx}: {[t, stock, side, order, size]}")
+    print("CSV generation completed.")
+
 
 
 def read_csv():
@@ -262,7 +274,11 @@ class App(object):
         self._data_1 = order_book(read_csv(), self._book_1, 'ABC')
         self._data_2 = order_book(read_csv(), self._book_2, 'DEF')
         self._rt_start = datetime.now()
-        self._sim_start, _, _ = next(self._data_1)
+        try:
+            self._sim_start, _, _ = next(self._data_1)
+        except StopIteration:
+            print("Error: No data available in test.csv for initialization.")
+            raise
         self.read_10_first_lines()
 
     @property
@@ -284,9 +300,13 @@ class App(object):
                 yield t, bids, asks
 
     def read_10_first_lines(self):
-        for _ in iter(range(10)):
-            next(self._data_1)
-            next(self._data_2)
+        for _ in range(10):
+            try:
+                next(self._data_1)
+                next(self._data_2)
+            except StopIteration:
+                print("Error: Not enough data in test.csv to read 10 lines.")
+                break
 
     @route('/query')
     def handle_query(self, x):
@@ -297,7 +317,7 @@ class App(object):
             t1, bids1, asks1 = next(self._current_book_1)
             t2, bids2, asks2 = next(self._current_book_2)
         except Exception as e:
-            print("error getting stocks...reinitalizing app")
+            print("error getting stocks...reinitializing app:", e)
             self.__init__()
             t1, bids1, asks1 = next(self._current_book_1)
             t2, bids2, asks2 = next(self._current_book_2)
@@ -329,6 +349,7 @@ class App(object):
                     'size': asks2[0][1]
                 }
             }]
+
 
 
 ################################################################################
