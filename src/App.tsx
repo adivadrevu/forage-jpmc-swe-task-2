@@ -8,6 +8,8 @@ import './App.css';
  */
 interface IState {
   data: ServerRespond[],
+  showGraph: boolean, // Flag to control the streaming of data
+  interval?: NodeJS.Timeout | null, // Declare interval as optional
 }
 
 /**
@@ -22,26 +24,68 @@ class App extends Component<{}, IState> {
       // data saves the server responds.
       // We use this state to parse data down to the child element (Graph) as element property
       data: [],
+      showGraph: false, // Initialize to false as streaming is not started initially
+      interval: null, // Initialize interval to null
     };
   }
+
+  /**
+   * Lifecycle method that starts data streaming when component mounts.
+   * Called immediately after a component is mounted. Setting state here will trigger re-rendering.
+   */
+  componentDidMount() {
+    this.startStreaming();
+  }
+
+  /**
+   * Start streaming data from the server.
+   * This function fetches data every 100ms from the server until the component unmounts.
+   */
+  startStreaming() {
+    let interval: NodeJS.Timeout;
+    interval = setInterval(() => {
+      this.getDataFromServer();
+    }, 100);
+    this.setState({ showGraph: true, interval });
+  }
+  
+
+  /**
+   * Stop streaming data from the server.
+   * This function clears the interval set for fetching data.
+   */
+  stopStreaming() {
+    if (this.state.interval) {
+      clearInterval(this.state.interval);
+      this.setState({ interval: null });
+    }
+  }
+  
+
+  /**
+   * Get new data from server and update the state with the new data.
+   * The function also handles duplicate data by checking the timestamp.
+   */
+  getDataFromServer() {
+    DataStreamer.getData((serverResponds: ServerRespond[]) => {
+      this.setState((prevState) => ({
+        data: [...prevState.data, ...serverResponds.filter((newData) => (
+          !prevState.data.some((prevData) => (
+            newData.timestamp === prevData.timestamp && newData.stock === prevData.stock
+          ))
+        ))],
+      }));
+    });
+  }
+  
 
   /**
    * Render Graph react component with state.data parse as property data
    */
   renderGraph() {
-    return (<Graph data={this.state.data}/>)
+    return <Graph data={this.state.data} />;
   }
-
-  /**
-   * Get new data from server and update the state with the new data
-   */
-  getDataFromServer() {
-    DataStreamer.getData((serverResponds: ServerRespond[]) => {
-      // Update the state by creating a new array of data that consists of
-      // Previous data in the state and the new data from server
-      this.setState({ data: [...this.state.data, ...serverResponds] });
-    });
-  }
+  
 
   /**
    * Render the App react component
@@ -54,12 +98,7 @@ class App extends Component<{}, IState> {
         </header>
         <div className="App-content">
           <button className="btn btn-primary Stream-button"
-            // when button is click, our react app tries to request
-            // new data from the server.
-            // As part of your task, update the getDataFromServer() function
-            // to keep requesting the data every 100ms until the app is closed
-            // or the server does not return anymore data.
-            onClick={() => {this.getDataFromServer()}}>
+            onClick={() => { this.startStreaming() }}>
             Start Streaming Data
           </button>
           <div className="Graph">
@@ -67,7 +106,14 @@ class App extends Component<{}, IState> {
           </div>
         </div>
       </div>
-    )
+    );
+  }
+
+  /**
+   * Clear interval to stop data streaming when component is unmounted.
+   */
+  componentWillUnmount() {
+    this.stopStreaming();
   }
 }
 
